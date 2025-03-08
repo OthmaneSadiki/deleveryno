@@ -1,16 +1,19 @@
 # users/views.py
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import status, generics
+from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth import authenticate
 from rest_framework.authtoken.models import Token
 
+from .models import User
 from .serializers import (
     SellerRegistrationSerializer,
     DriverRegistrationSerializer,
     LoginSerializer,
     UserSerializer
 )
+from mainapp.permissions import IsAdmin
 
 class SellerRegistrationView(APIView):
     """
@@ -56,7 +59,7 @@ class LoginView(APIView):
             user = authenticate(username=username, password=password)
             if user:
                 # Optionally enforce that the user must be approved by an admin.
-                if not user.approved:
+                if not user.approved and user.role != 'admin':
                     return Response({"error": "User not approved by admin."},
                                     status=status.HTTP_403_FORBIDDEN)
                 # Generate or retrieve the token for this user.
@@ -67,3 +70,46 @@ class LoginView(APIView):
                 }, status=status.HTTP_200_OK)
             return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class UserProfileView(APIView):
+    """
+    API endpoint for retrieving and updating the current user's profile.
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        serializer = UserSerializer(request.user)
+        return Response(serializer.data)
+    
+    def patch(self, request):
+        serializer = UserSerializer(request.user, data=request.data, partial=True)
+        if serializer.is_valid():
+            # Don't allow changing role or approval status via this endpoint
+            if 'role' in serializer.validated_data:
+                del serializer.validated_data['role']
+            if 'approved' in serializer.validated_data:
+                del serializer.validated_data['approved']
+                
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ApproveUserView(APIView):
+    """
+    API endpoint for admins to approve users.
+    Only admins can access this endpoint.
+    """
+    permission_classes = [IsAuthenticated, IsAdmin]
+    
+    def patch(self, request, pk):
+        try:
+            user = User.objects.get(pk=pk)
+        except User.DoesNotExist:
+            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+        
+        user.approved = True
+        user.save()
+        
+        return Response(UserSerializer(user).data)
