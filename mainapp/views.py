@@ -3,6 +3,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
+from django_filters.rest_framework import DjangoFilterBackend
 
 from .models import Address, Order, Stock
 from .serializers import (
@@ -14,6 +15,8 @@ from .permissions import (
     IsAdminOrSellerOwner, IsAdminOrAssignedDriver
 )
 
+from django.contrib.auth import get_user_model
+User = get_user_model()
 
 class AddressListCreateView(generics.ListCreateAPIView):
     """
@@ -58,6 +61,8 @@ class OrderListCreateView(generics.ListCreateAPIView):
         elif user.role == 'driver':
             return Order.objects.filter(driver=user)
         return Order.objects.none()
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['status', 'created_at']
 
 
 class SellerOrderListView(generics.ListAPIView):
@@ -118,6 +123,14 @@ class OrderStatusUpdateView(APIView):
                 {"error": "You don't have permission to update this order's status."},
                 status=status.HTTP_403_FORBIDDEN
             )
+        if serializer.validated_data.get('status') == 'delivered':
+            try:
+                stock = Stock.objects.get(seller=order.seller, item_name=order.item)
+                if stock.quantity >= order.quantity:
+                    stock.quantity -= order.quantity
+                    stock.save()
+            except Stock.DoesNotExist:
+                pass
             
         serializer = OrderStatusUpdateSerializer(order, data=request.data, partial=True)
         if serializer.is_valid():
@@ -158,3 +171,23 @@ class StockDetailView(generics.RetrieveUpdateDestroyAPIView):
         elif user.role == 'seller':
             return Stock.objects.filter(seller=user)
         return Stock.objects.none()
+
+class AssignDriverView(APIView):
+    permission_classes = [IsAuthenticated, IsAdmin]
+    
+    def patch(self, request, pk):
+        order = get_object_or_404(Order, pk=pk)
+        driver_id = request.data.get('driver_id')
+        if not driver_id:
+            return Response({"error": "Driver ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+            
+        try:
+            driver = User.objects.get(pk=driver_id, role='driver')
+        except User.DoesNotExist:
+            return Response({"error": "Driver not found"}, status=status.HTTP_404_NOT_FOUND)
+            
+        order.driver = driver
+        order.status = 'assigned'
+        order.save()
+        
+        return Response(OrderDetailSerializer(order).data)
