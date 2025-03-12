@@ -1,16 +1,8 @@
 from rest_framework import serializers
-from .models import Address, Order, Stock
+from .models import Order, Stock
 from users.serializers import UserSerializer
 
-class AddressSerializer(serializers.ModelSerializer):
-    """
-    Serializer for the Address model.
-    """
-    class Meta:
-        model = Address
-        fields = ['id', 'street', 'city']
-
-
+# mainapp/serializers.py
 class OrderCreateSerializer(serializers.ModelSerializer):
     """
     Serializer for creating a new order.
@@ -18,29 +10,43 @@ class OrderCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = [
-            'id', 'customer_name', 'customer_phone', 'delivery_address',
+            'id', 'customer_name', 'customer_phone', 
+            'delivery_street', 'delivery_city', 'delivery_location',
             'item', 'quantity', 'status'
         ]
 
     def create(self, validated_data):
         # Set the seller as the current user
         validated_data['seller'] = self.context['request'].user
+        
+        # Check stock availability
+        item = validated_data.get('item')
+        quantity = validated_data.get('quantity', 1)
+        seller = validated_data['seller']
+        
+        try:
+            stock = Stock.objects.get(seller=seller, item_name=item)
+            if stock.quantity < quantity:
+                raise serializers.ValidationError(f"Insufficient stock for {item}. Available: {stock.quantity}")
+        except Stock.DoesNotExist:
+            raise serializers.ValidationError(f"Item {item} is not in your inventory.")
+            
         return super().create(validated_data)
 
 
 class OrderDetailSerializer(serializers.ModelSerializer):
     """
-    Detailed serializer for the Order model, including related fields.
+    Detailed serializer for the Order model.
     """
     seller = UserSerializer(read_only=True)
     driver = UserSerializer(read_only=True)
-    delivery_address = AddressSerializer(read_only=True)
     
     class Meta:
         model = Order
         fields = [
             'id', 'seller', 'driver', 'customer_name', 'customer_phone',
-            'delivery_address', 'item', 'quantity', 'status',
+            'delivery_street', 'delivery_city', 'delivery_location',
+            'item', 'quantity', 'status',
             'created_at', 'updated_at'
         ]
 

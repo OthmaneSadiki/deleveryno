@@ -1,25 +1,13 @@
 from django.db import models
 from django.conf import settings
+from django.core.exceptions import ValidationError
 
 
-class Address(models.Model):
-    """
-    Represents a physical address used for order delivery.
-    """
-    street = models.CharField(max_length=255)
-    city = models.CharField(max_length=100)
-    
-    
-    def __str__(self):
-        return f"{self.street}, {self.city}"
 
 
 class Order(models.Model):
     """
     Represents an order created by a seller.
-    - A seller creates an order with customer details, delivery address, and item information.
-    - Only admins can assign a driver to the order by updating the `driver` field.
-    - Once a driver is assigned, only that driver (or an admin) should update the order's status.
     """
     ORDER_STATUS_CHOICES = [
         ('pending', 'Pending'),
@@ -31,33 +19,36 @@ class Order(models.Model):
         ('postponed', 'Postponed'),
     ]
 
-    # The seller who created the order.
+    # The seller who created the order
     seller = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="orders"
     )
-    # Customer details provided by the seller.
+    
+    # Customer details provided by the seller
     customer_name = models.CharField(max_length=255)
     customer_phone = models.CharField(max_length=20)
-    # Delivery address for the order.
-    delivery_address = models.ForeignKey(
-        Address,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="orders"
+    
+    # Delivery address details (flattened from the previous Address model)
+    delivery_street = models.CharField(max_length=255)
+    delivery_city = models.CharField(max_length=100)
+    delivery_location = models.CharField(
+        max_length=255, 
+        blank=True, 
+        help_text="Google Maps location string"
     )
-    # Item details.
+    
+    # Item details
     item = models.CharField(max_length=255)
     quantity = models.PositiveIntegerField(default=1)
-    # Order status: the lifecycle from order creation through delivery.
+    
+    # Order status and assignment
     status = models.CharField(
         max_length=20,
         choices=ORDER_STATUS_CHOICES,
         default='pending'
     )
-    # The driver assigned to deliver the order; initially null.
     driver = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -65,11 +56,38 @@ class Order(models.Model):
         blank=True,
         related_name="assigned_orders"
     )
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    def clean(self):
+        """Validate status transitions"""
+        if not self.pk:
+            return  # Skip validation for new orders
+            
+        old_instance = Order.objects.get(pk=self.pk)
+        
+        # Define valid status transitions
+        valid_transitions = {
+            'pending': ['assigned', 'canceled'],
+            'assigned': ['in_transit', 'canceled', 'pending'],
+            'in_transit': ['delivered', 'no_answer', 'postponed', 'canceled'],
+            'no_answer': ['in_transit', 'canceled', 'postponed'],
+            'postponed': ['in_transit', 'canceled'],
+            'delivered': [],  # Terminal state
+            'canceled': [],   # Terminal state
+        }
+        
+        if (old_instance.status != self.status and 
+            self.status not in valid_transitions.get(old_instance.status, [])):
+            raise ValidationError(f"Invalid status transition from {old_instance.status} to {self.status}")
+    
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return f"Order #{self.pk} by {self.seller}"
+        return f"Order #{self.pk} by {self.seller.username} for {self.customer_name}"
 
 
 class Stock(models.Model):

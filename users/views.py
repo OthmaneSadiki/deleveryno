@@ -115,13 +115,34 @@ class ApproveUserView(APIView):
         
         return Response(UserSerializer(user).data)
 
+# Add this to users/views.py
 class UserListView(generics.ListAPIView):
     """
-    API endpoint for admins to list all users.
-    Only admins can access this endpoint.
+    API endpoint for listing all users.
+    Admin can see all users, other users see only themselves.
     """
     serializer_class = UserSerializer
-    permission_classes = [IsAuthenticated, IsAdmin]
+    permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
-        return User.objects.all()
+        user = self.request.user
+        # Admin can see all users
+        if user.role == 'admin':
+            return User.objects.all()
+        # Other users can only see themselves
+        return User.objects.filter(id=user.id)
+    
+class DebugView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        user = request.user
+        return Response({
+            'username': user.username,
+            'role': user.role,
+            'is_authenticated': user.is_authenticated,
+            'approved': user.approved,
+            'user_id': user.id,
+            'is_staff': user.is_staff,
+            'is_superuser': user.is_superuser
+        })

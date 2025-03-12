@@ -5,9 +5,11 @@ from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 
-from .models import Address, Order, Stock
+from users.serializers import UserSerializer
+
+from .models import  Order, Stock
 from .serializers import (
-    AddressSerializer, OrderCreateSerializer, OrderDetailSerializer,
+    OrderCreateSerializer, OrderDetailSerializer,
     OrderStatusUpdateSerializer, StockSerializer
 )
 from .permissions import (
@@ -18,25 +20,10 @@ from .permissions import (
 from django.contrib.auth import get_user_model
 User = get_user_model()
 
-class AddressListCreateView(generics.ListCreateAPIView):
-    """
-    API endpoint that allows addresses to be viewed or created.
-    """
-    serializer_class = AddressSerializer
-    permission_classes = [IsAuthenticated]
-    
-    def get_queryset(self):
-        # Anyone can see addresses
-        return Address.objects.all()
 
 
-class AddressDetailView(generics.RetrieveUpdateDestroyAPIView):
-    """
-    API endpoint that allows a single address to be viewed, updated, or deleted.
-    """
-    queryset = Address.objects.all()
-    serializer_class = AddressSerializer
-    permission_classes = [IsAuthenticated]
+
+
 
 
 class OrderListCreateView(generics.ListCreateAPIView):
@@ -108,9 +95,6 @@ class OrderDetailView(generics.RetrieveUpdateDestroyAPIView):
 class OrderStatusUpdateView(APIView):
     """
     API endpoint that allows updating the status of an order.
-    - Admins can update any order's status
-    - Assigned drivers can update their orders' status
-    - Sellers cannot update the status (they must go through admin)
     """
     permission_classes = [IsAuthenticated, IsAdminOrAssignedDriver]
     
@@ -124,23 +108,29 @@ class OrderStatusUpdateView(APIView):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        # First create the serializer
         serializer = OrderStatusUpdateSerializer(order, data=request.data, partial=True)
         
         if serializer.is_valid():
-            # Check if delivered status and update stock
-            if serializer.validated_data.get('status') == 'delivered':
-                try:
-                    stock = Stock.objects.get(seller=order.seller, item_name=order.item)
-                    if stock.quantity >= order.quantity:
-                        stock.quantity -= order.quantity
-                        stock.save()
-                except Stock.DoesNotExist:
-                    pass
+            # Save the order first
+            updated_order = serializer.save()
             
-            serializer.save()
-            return Response(OrderDetailSerializer(order).data)
+            # If status changed to delivered, update stock in a separate service call
+            if updated_order.status == 'delivered':
+                self._update_stock_on_delivery(updated_order)
+                
+            return Response(OrderDetailSerializer(updated_order).data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    def _update_stock_on_delivery(self, order):
+        """Helper method to update stock when an order is delivered"""
+        try:
+            stock = Stock.objects.get(seller=order.seller, item_name=order.item)
+            if stock.quantity >= order.quantity:
+                stock.quantity -= order.quantity
+                stock.save()
+        except Stock.DoesNotExist:
+            # Log this situation but don't break the flow
+            print(f"Warning: Stock not found for item {order.item} from seller {order.seller.id}")
 
 
 class StockListCreateView(generics.ListCreateAPIView):
@@ -195,3 +185,13 @@ class AssignDriverView(APIView):
         order.save()
         
         return Response(OrderDetailSerializer(order).data)
+class UserListView(generics.ListAPIView):
+    serializer_class = UserSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        user = self.request.user
+        # Only admins can see all users
+        if user.role == 'admin':
+            return User.objects.all()
+        return User.objects.none() 
