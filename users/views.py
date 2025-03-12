@@ -5,6 +5,7 @@ from rest_framework import status, generics
 from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth import authenticate
 from rest_framework.authtoken.models import Token
+from rest_framework import generics
 
 from .models import User
 from .serializers import (
@@ -113,3 +114,14 @@ class ApproveUserView(APIView):
         user.save()
         
         return Response(UserSerializer(user).data)
+
+class UserListView(generics.ListAPIView):
+    """
+    API endpoint for admins to list all users.
+    Only admins can access this endpoint.
+    """
+    serializer_class = UserSerializer
+    permission_classes = [IsAuthenticated, IsAdmin]
+    
+    def get_queryset(self):
+        return User.objects.all()

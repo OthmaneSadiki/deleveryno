@@ -123,17 +123,21 @@ class OrderStatusUpdateView(APIView):
                 {"error": "You don't have permission to update this order's status."},
                 status=status.HTTP_403_FORBIDDEN
             )
-        if serializer.validated_data.get('status') == 'delivered':
-            try:
-                stock = Stock.objects.get(seller=order.seller, item_name=order.item)
-                if stock.quantity >= order.quantity:
-                    stock.quantity -= order.quantity
-                    stock.save()
-            except Stock.DoesNotExist:
-                pass
-            
+        
+        # First create the serializer
         serializer = OrderStatusUpdateSerializer(order, data=request.data, partial=True)
+        
         if serializer.is_valid():
+            # Check if delivered status and update stock
+            if serializer.validated_data.get('status') == 'delivered':
+                try:
+                    stock = Stock.objects.get(seller=order.seller, item_name=order.item)
+                    if stock.quantity >= order.quantity:
+                        stock.quantity -= order.quantity
+                        stock.save()
+                except Stock.DoesNotExist:
+                    pass
+            
             serializer.save()
             return Response(OrderDetailSerializer(order).data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
