@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
+from django_filters import rest_framework as filters
 
 from users.serializers import UserSerializer
 
@@ -90,6 +91,7 @@ class DriverOrderListView(generics.ListAPIView):
     """
     serializer_class = OrderDetailSerializer
     permission_classes = [IsAuthenticated, IsDriver]
+    pagination_class = None #uncomment this line to disable pagination
     
     def get_queryset(self):
         return Order.objects.filter(driver=self.request.user)
@@ -280,3 +282,13 @@ class UserListView(generics.ListAPIView):
             return User.objects.all()
         # Other users can only see themselves
         return User.objects.filter(id=user.id)
+    
+
+
+class OrderFilter(filters.FilterSet):
+    min_date = filters.DateFilter(field_name="created_at", lookup_expr='gte')
+    max_date = filters.DateFilter(field_name="created_at", lookup_expr='lte')
+    
+    class Meta:
+        model = Order
+        fields = ['status', 'delivery_city', 'min_date', 'max_date']

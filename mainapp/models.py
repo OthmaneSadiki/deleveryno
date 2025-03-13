@@ -88,6 +88,14 @@ class Order(models.Model):
 
     def __str__(self):
         return f"Order #{self.pk} by {self.seller.username} for {self.customer_name}"
+    class Meta:
+        ordering = ['-updated_at']
+        indexes = [
+            models.Index(fields=['status']),
+            models.Index(fields=['created_at']),
+            models.Index(fields=['seller']),
+            models.Index(fields=['driver']),
+        ]
 
 
 class Stock(models.Model):
