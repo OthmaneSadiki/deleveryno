@@ -68,3 +68,12 @@ class IsAdminOrAssignedDriver(permissions.BasePermission):
         if request.user.role == 'driver' and hasattr(obj, 'driver'):
             return obj.driver == request.user
         return False
+
+class IsAdminSeller(permissions.BasePermission):
+    """
+    Custom permission to allow only admins and sellers.
+    """
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and (
+            request.user.role == 'admin' or request.user.role == 'seller'
+        )

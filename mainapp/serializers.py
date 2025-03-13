@@ -7,22 +7,31 @@ class OrderCreateSerializer(serializers.ModelSerializer):
     """
     Serializer for creating a new order.
     """
+    seller_id = serializers.IntegerField(required=False, write_only=True)
+    
     class Meta:
         model = Order
         fields = [
             'id', 'customer_name', 'customer_phone', 
             'delivery_street', 'delivery_city', 'delivery_location',
-            'item', 'quantity', 'status'
+            'item', 'quantity', 'status', 'seller_id'
         ]
 
     def create(self, validated_data):
-        # Set the seller as the current user
-        validated_data['seller'] = self.context['request'].user
+        # Remove seller_id if present as it's handled in the view
+        if 'seller_id' in validated_data:
+            validated_data.pop('seller_id')
+        
+        # If seller is not set in validated_data, use request user (default behavior)
+        if 'seller' not in validated_data:
+            validated_data['seller'] = self.context['request'].user
+            
+        # Get seller for stock check
+        seller = validated_data['seller']
         
         # Check stock availability
         item = validated_data.get('item')
         quantity = validated_data.get('quantity', 1)
-        seller = validated_data['seller']
         
         try:
             stock = Stock.objects.get(seller=seller, item_name=item)
@@ -64,11 +73,9 @@ class StockSerializer(serializers.ModelSerializer):
     """
     Serializer for the Stock model.
     """
+    seller_id = serializers.IntegerField(required=False, write_only=True)
+    seller = UserSerializer(read_only=True)
+    
     class Meta:
         model = Stock
-        fields = ['id', 'item_name', 'quantity']
-    
-    def create(self, validated_data):
-        # Set the seller as the current user
-        validated_data['seller'] = self.context['request'].user
-        return super().create(validated_data)
+        fields = ['id', 'seller', 'seller_id', 'item_name', 'quantity']

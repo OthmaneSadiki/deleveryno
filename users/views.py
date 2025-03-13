@@ -118,15 +118,14 @@ class ApproveUserView(APIView):
 # Add this to users/views.py
 class UserListView(generics.ListAPIView):
     """
-    API endpoint for listing all users.
-    Admin can see all users, other users see only themselves.
+    API endpoint for listing users.
+    GET: Admin can see all users, sellers and drivers can see only themselves.
     """
     serializer_class = UserSerializer
     permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
         user = self.request.user
-        # Admin can see all users
         if user.role == 'admin':
             return User.objects.all()
         # Other users can only see themselves
@@ -146,3 +145,14 @@ class DebugView(APIView):
             'is_staff': user.is_staff,
             'is_superuser': user.is_superuser
         })
+    
+class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    API endpoint for admins to manage users.
+    GET: Retrieve a specific user
+    PUT/PATCH: Update user details
+    DELETE: Delete a user
+    """
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+    permission_classes = [IsAuthenticated, IsAdmin]
