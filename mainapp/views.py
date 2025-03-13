@@ -259,6 +259,7 @@ class AssignDriverView(APIView):
             return Response({"error": "Driver ID is required"}, status=status.HTTP_400_BAD_REQUEST)
             
         try:
+            # This is the important line - add the role filter
             driver = User.objects.get(pk=driver_id, role='driver')
         except User.DoesNotExist:
             return Response({"error": "Driver not found"}, status=status.HTTP_404_NOT_FOUND)

@@ -37,8 +37,13 @@ class BaseRegistrationSerializer(serializers.ModelSerializer):
                     break
                     
             validated_data['username'] = username
-            
-        return super().create(validated_data)
+        
+        # Extract password to hash it properly
+        password = validated_data.pop('password')
+        user = User(**validated_data)
+        user.set_password(password)  # This properly hashes the password
+        user.save()
+        return user
 
 class SellerRegistrationSerializer(BaseRegistrationSerializer):
     def create(self, validated_data):

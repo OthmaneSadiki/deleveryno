@@ -12,3 +12,4 @@ class User(AbstractUser):
     phone = models.CharField(max_length=20, blank=True)
     city = models.CharField(max_length=100, blank=True)
     approved = models.BooleanField(default=False)
+    email = models.EmailField(unique=True)

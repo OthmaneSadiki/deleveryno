@@ -163,3 +163,8 @@ REST_FRAMEWORK = {
     'ALLOWED_VERSIONS': ['v1'],
 }
 
+AUTHENTICATION_BACKENDS = [
+    'users.auth_backends.EmailBackend',
+    'django.contrib.auth.backends.ModelBackend',  # Keep the default backend
+]
+

@@ -51,30 +51,22 @@ class LoginView(APIView):
         email = request.data.get('email')
         password = request.data.get('password')
         
-        try:
-            # Find user by email instead of username
-            user = User.objects.get(email=email)
-            # Authenticate with the found username
-            auth_user = authenticate(username=user.username, password=password)
-            
-            if auth_user:
-                if not auth_user.approved and auth_user.role != 'admin':
-                    return Response({"error": "User not approved by admin."},
-                                status=status.HTTP_403_FORBIDDEN)
-                
-                token, created = Token.objects.get_or_create(user=auth_user)
-                return Response({
-                    "token": token.key,
-                    "user": UserSerializer(auth_user).data
-                }, status=status.HTTP_200_OK)
-            
-            return Response({"error": "Invalid credentials"}, 
-                          status=status.HTTP_401_UNAUTHORIZED)
+        # Use the authenticate function with email parameter
+        user = authenticate(request=request, email=email, password=password)
         
-        except User.DoesNotExist:
-            return Response({"error": "No user found with this email"}, 
-                          status=status.HTTP_401_UNAUTHORIZED)
-
+        if user:
+            if not user.approved and user.role != 'admin':
+                return Response({"error": "User not approved by admin."},
+                            status=status.HTTP_403_FORBIDDEN)
+            
+            token, created = Token.objects.get_or_create(user=user)
+            return Response({
+                "token": token.key,
+                "user": UserSerializer(user).data
+            }, status=status.HTTP_200_OK)
+        
+        return Response({"error": "Invalid credentials"}, 
+                      status=status.HTTP_401_UNAUTHORIZED)
 
 class UserProfileView(APIView):
     """
