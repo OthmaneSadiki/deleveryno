@@ -1,56 +1,55 @@
 
+import uuid
 from rest_framework import serializers
 from .models import User
 
-class SellerRegistrationSerializer(serializers.ModelSerializer):
-    """
-    Serializer for registering a seller.
-    
-    The seller provides details such as username, email, password,
-    first name, last name, phone, and city. The role is automatically
-    set to "seller". The password field is write-only and will be hashed
-    when the user is created.
-    """
+class BaseRegistrationSerializer(serializers.ModelSerializer):
+    """Base serializer for user registration with auto-username generation."""
     password = serializers.CharField(
         write_only=True,
         required=True,
         style={'input_type': 'password'}
     )
-
+    # Make username optional
+    username = serializers.CharField(required=False)
+    
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'password', 'first_name', 'last_name', 'phone', 'city']
 
     def create(self, validated_data):
-        # Force the role to be 'seller'
+        # Generate username if not provided
+        if 'username' not in validated_data or not validated_data['username']:
+            email_prefix = validated_data['email'].split('@')[0]
+            # Create a unique username based on email prefix
+            base_username = email_prefix[:15]  # Limit length
+            username = base_username
+            
+            # Check if username exists and append random string if needed
+            counter = 1
+            while User.objects.filter(username=username).exists():
+                # Generate a shorter unique suffix
+                suffix = str(uuid.uuid4())[:8]
+                username = f"{base_username[:10]}_{suffix}"
+                counter += 1
+                if counter > 10:  # Avoid infinite loop
+                    username = f"user_{str(uuid.uuid4())[:10]}"
+                    break
+                    
+            validated_data['username'] = username
+            
+        return super().create(validated_data)
+
+class SellerRegistrationSerializer(BaseRegistrationSerializer):
+    def create(self, validated_data):
         validated_data['role'] = 'seller'
-        # Create the user using Django's create_user method, which hashes the password.
-        user = User.objects.create_user(**validated_data)
-        return user
+        return super().create(validated_data)
 
 
-class DriverRegistrationSerializer(serializers.ModelSerializer):
-    """
-    Serializer for registering a driver.
-    
-    Similar to the SellerRegistrationSerializer, it takes in the registration
-    details and forces the role to "driver". The password field is write-only.
-    """
-    password = serializers.CharField(
-        write_only=True,
-        required=True,
-        style={'input_type': 'password'}
-    )
-
-    class Meta:
-        model = User
-        fields = ['id', 'username', 'email', 'password', 'first_name', 'last_name', 'phone', 'city']
-
+class DriverRegistrationSerializer(BaseRegistrationSerializer):
     def create(self, validated_data):
-        # Force the role to be 'driver'
         validated_data['role'] = 'driver'
-        user = User.objects.create_user(**validated_data)
-        return user
+        return super().create(validated_data)
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -73,9 +72,11 @@ class LoginSerializer(serializers.Serializer):
     This serializer is used to validate login credentials. It requires
     the username and password (which is write-only for security).
     """
-    username = serializers.CharField(required=True)
+    email = serializers.EmailField(required=True)
     password = serializers.CharField(
         write_only=True,
         required=True,
         style={'input_type': 'password'}
     )
+
+

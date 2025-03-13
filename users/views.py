@@ -47,30 +47,33 @@ class DriverRegistrationView(APIView):
 
 
 class LoginView(APIView):
-    """
-    API endpoint for user login.
-    Validates the provided username and password. If authentication is successful and the user is approved,
-    an authentication token is returned along with the user details.
-    """
     def post(self, request):
-        serializer = LoginSerializer(data=request.data)
-        if serializer.is_valid():
-            username = serializer.validated_data.get('username')
-            password = serializer.validated_data.get('password')
-            user = authenticate(username=username, password=password)
-            if user:
-                # Optionally enforce that the user must be approved by an admin.
-                if not user.approved and user.role != 'admin':
+        email = request.data.get('email')
+        password = request.data.get('password')
+        
+        try:
+            # Find user by email instead of username
+            user = User.objects.get(email=email)
+            # Authenticate with the found username
+            auth_user = authenticate(username=user.username, password=password)
+            
+            if auth_user:
+                if not auth_user.approved and auth_user.role != 'admin':
                     return Response({"error": "User not approved by admin."},
-                                    status=status.HTTP_403_FORBIDDEN)
-                # Generate or retrieve the token for this user.
-                token, created = Token.objects.get_or_create(user=user)
+                                status=status.HTTP_403_FORBIDDEN)
+                
+                token, created = Token.objects.get_or_create(user=auth_user)
                 return Response({
                     "token": token.key,
-                    "user": UserSerializer(user).data
+                    "user": UserSerializer(auth_user).data
                 }, status=status.HTTP_200_OK)
-            return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
+            return Response({"error": "Invalid credentials"}, 
+                          status=status.HTTP_401_UNAUTHORIZED)
+        
+        except User.DoesNotExist:
+            return Response({"error": "No user found with this email"}, 
+                          status=status.HTTP_401_UNAUTHORIZED)
 
 
 class UserProfileView(APIView):
