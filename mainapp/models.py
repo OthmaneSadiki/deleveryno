@@ -110,7 +110,10 @@ class Stock(models.Model):
     )
     item_name = models.CharField(max_length=255)
     quantity = models.PositiveIntegerField(default=0)
+    approved = models.BooleanField(default=False)  # New field for admin approval
+    created_at = models.DateTimeField(auto_now_add=True)  # Track when item was added
+    updated_at = models.DateTimeField(auto_now=True)  # Track when item was updated
 
     def __str__(self):
-        return f"{self.item_name} - {self.quantity}"
+        return f"{self.item_name} - {self.quantity} - {'Approved' if self.approved else 'Pending'}"
 

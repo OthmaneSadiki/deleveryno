@@ -293,3 +293,21 @@ class OrderFilter(filters.FilterSet):
     class Meta:
         model = Order
         fields = ['status', 'delivery_city', 'min_date', 'max_date']
+
+class ApproveStockView(APIView):
+    """
+    API endpoint for admins to approve stock items.
+    Only admins can access this endpoint.
+    """
+    permission_classes = [IsAuthenticated, IsAdmin]
+    
+    def patch(self, request, pk):
+        try:
+            stock = Stock.objects.get(pk=pk)
+        except Stock.DoesNotExist:
+            return Response({"error": "Stock item not found"}, status=status.HTTP_404_NOT_FOUND)
+        
+        stock.approved = True
+        stock.save()
+        
+        return Response(StockSerializer(stock).data)

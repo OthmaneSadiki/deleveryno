@@ -21,25 +21,31 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         # Remove seller_id if present as it's handled in the view
         if 'seller_id' in validated_data:
             validated_data.pop('seller_id')
-        
+    
         # If seller is not set in validated_data, use request user (default behavior)
         if 'seller' not in validated_data:
             validated_data['seller'] = self.context['request'].user
-            
+        
         # Get seller for stock check
         seller = validated_data['seller']
-        
-        # Check stock availability
+    
+        # Check stock availability and approval
         item = validated_data.get('item')
         quantity = validated_data.get('quantity', 1)
-        
+    
         try:
             stock = Stock.objects.get(seller=seller, item_name=item)
+        
+            # Check if stock is approved
+            if not stock.approved:
+                raise serializers.ValidationError(f"Item {item} is pending approval and cannot be used yet.")
+            
+            # Check quantity
             if stock.quantity < quantity:
                 raise serializers.ValidationError(f"Insufficient stock for {item}. Available: {stock.quantity}")
         except Stock.DoesNotExist:
             raise serializers.ValidationError(f"Item {item} is not in your inventory.")
-            
+        
         return super().create(validated_data)
 
 
@@ -78,4 +84,5 @@ class StockSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Stock
-        fields = ['id', 'seller', 'seller_id', 'item_name', 'quantity']
+        fields = ['id', 'seller', 'seller_id', 'item_name', 'quantity', 'approved', 'created_at', 'updated_at']
+        read_only_fields = ['approved', 'created_at', 'updated_at']
