@@ -85,4 +85,18 @@ class StockSerializer(serializers.ModelSerializer):
     class Meta:
         model = Stock
         fields = ['id', 'seller', 'seller_id', 'item_name', 'quantity', 'approved', 'created_at', 'updated_at']
-        read_only_fields = ['approved', 'created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at']
+
+    def update(self, instance, validated_data):
+        # If the user is an admin, don't un-approve when updating quantity or name
+        request = self.context.get('request')
+        if request and request.user.role == 'admin':
+            # Admins can update without changing approval status
+            instance.item_name = validated_data.get('item_name', instance.item_name)
+            instance.quantity = validated_data.get('quantity', instance.quantity)
+            instance.save()
+            return instance
+        else:
+            # For sellers, any update (including quantity) requires re-approval
+            instance.approved = False
+            return super().update(instance, validated_data)

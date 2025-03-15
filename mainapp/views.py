@@ -185,15 +185,17 @@ class OrderStatusUpdateView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     def _update_stock_on_delivery(self, order):
-        """Helper method to update stock when an order is delivered"""
-        try:
-            stock = Stock.objects.get(seller=order.seller, item_name=order.item)
-            if stock.quantity >= order.quantity:
-                stock.quantity -= order.quantity
-                stock.save()
-        except Stock.DoesNotExist:
-            # Log this situation but don't break the flow
-            print(f"Warning: Stock not found for item {order.item} from seller {order.seller.id}")
+        """Helper method to update stock when an order is set to in_transit"""
+        # Only update stock if status changed to in_transit
+        if order.status == 'in_transit':
+            try:
+                stock = Stock.objects.get(seller=order.seller, item_name=order.item)
+                if stock.quantity >= order.quantity:
+                    stock.quantity -= order.quantity
+                    stock.save()
+            except Stock.DoesNotExist:
+                # Log this situation but don't break the flow
+                print(f"Warning: Stock not found for item {order.item} from seller {order.seller.id}")
 
 
 class StockListCreateView(generics.ListCreateAPIView):
@@ -214,23 +216,24 @@ class StockListCreateView(generics.ListCreateAPIView):
         return Stock.objects.none()
     
     def perform_create(self, serializer):
-        """
-        Override to allow admins to create stock for any seller.
-        Sellers can only create stock for themselves.
-        """
+    
         user = self.request.user
-        
+    
         # If seller_id is provided in request data and user is admin
         if user.role == 'admin' and 'seller_id' in self.request.data:
             try:
                 seller_id = int(self.request.data['seller_id'])
                 seller = User.objects.get(id=seller_id, role='seller')
-                serializer.save(seller=seller)
+                # Auto-approve items created by admin
+                serializer.save(seller=seller, approved=True)
             except (User.DoesNotExist, ValueError):
                 # Fall back to using the admin as seller if seller_id is invalid
-                serializer.save(seller=user)
+                serializer.save(seller=user, approved=True)
+        elif user.role == 'admin':
+            # Auto-approve items created by admin even without seller_id
+            serializer.save(seller=user, approved=True)
         else:
-            # Default behavior - use current user as seller
+            # Default behavior - use current user as seller, not approved
             serializer.save(seller=user)
 
 
