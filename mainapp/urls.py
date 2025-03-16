@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import ApproveStockView, AssignDriverView
+from .views import ApproveStockView, AssignDriverView, MessageDetailView, MessageListCreateView
 from .views import (
     OrderListCreateView, OrderDetailView, OrderStatusUpdateView, 
     DriverOrderListView, SellerOrderListView,
@@ -24,6 +24,10 @@ urlpatterns = [
     
     # Admin stock management endpoint (for listing all stocks)
     path('admin/stock/', StockListCreateView.as_view(), name='admin-stock-list'),
+
+    # Message endpoints
+    path('messages/', MessageListCreateView.as_view(), name='message-list-create'),
+    path('messages/<int:pk>/', MessageDetailView.as_view(), name='message-detail'),
    
     
     

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import  Order, Stock
+from .models import  Order, Stock , Message
 
 
 
@@ -16,3 +16,11 @@ class StockAdmin(admin.ModelAdmin):
     list_display = ('id', 'seller', 'item_name', 'quantity')
     list_filter = ('seller',)
     search_fields = ('item_name',)
+
+@admin.register(Message)
+class MessageAdmin(admin.ModelAdmin):
+    list_display = ('id', 'sender', 'recipient', 'subject', 'status', 'created_at')
+    list_filter = ('status', 'created_at')
+    search_fields = ('subject', 'content')
+    readonly_fields = ('created_at', 'updated_at')
+    raw_id_fields = ('sender', 'recipient')

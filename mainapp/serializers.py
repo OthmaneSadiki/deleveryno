@@ -2,7 +2,9 @@ from django.forms import ValidationError
 from rest_framework import serializers
 
 from users.serializers import UserSerializer
-from .models import Order, Stock
+from .models import Order, Stock, Message
+from django.contrib.auth import get_user_model
+User = get_user_model()
 
 
 def validate_google_maps_url(value):
@@ -124,3 +126,53 @@ class StockSerializer(serializers.ModelSerializer):
             # For sellers, any update (including quantity) requires re-approval
             instance.approved = False
             return super().update(instance, validated_data)
+        
+
+# Add this to mainapp/serializers.py after the existing serializers
+
+class MessageSerializer(serializers.ModelSerializer):
+    """
+    Serializer for the Message model.
+    """
+    sender = UserSerializer(read_only=True)
+    recipient = UserSerializer(read_only=True)
+    recipient_id = serializers.IntegerField(write_only=True, required=False)
+    
+    class Meta:
+        model = Message
+        fields = [
+            'id', 'sender', 'recipient', 'recipient_id', 'subject', 
+            'content', 'status', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+    
+    def create(self, validated_data):
+        # Get current user (sender)
+        sender = self.context['request'].user
+        
+        # Handle recipient selection based on user role
+        if 'recipient_id' not in validated_data:
+            if sender.role in ['seller', 'driver']:
+                # For sellers and drivers, send to the first admin
+                try:
+                    admin_user = User.objects.filter(role='admin').first()
+                    if not admin_user:
+                        raise serializers.ValidationError("No admin user found to send message to")
+                    validated_data['recipient'] = admin_user
+                except User.DoesNotExist:
+                    raise serializers.ValidationError("No admin user found to send message to")
+            else:
+                # For admins, require explicit recipient
+                raise serializers.ValidationError("Recipient is required for admin messages")
+        else:
+            recipient_id = validated_data.pop('recipient_id')
+            try:
+                recipient = User.objects.get(id=recipient_id)
+                validated_data['recipient'] = recipient
+            except User.DoesNotExist:
+                raise serializers.ValidationError("Recipient not found")
+        
+        # Set the sender
+        validated_data['sender'] = sender
+        
+        return super().create(validated_data)

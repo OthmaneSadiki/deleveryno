@@ -5,12 +5,13 @@ from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from django_filters import rest_framework as filters
+from django.db.models import Q
 
 from users.serializers import UserSerializer
 
-from .models import  Order, Stock
+from .models import  Order, Stock , Message
 from .serializers import (
-    OrderCreateSerializer, OrderDetailSerializer,
+    MessageSerializer, OrderCreateSerializer, OrderDetailSerializer,
     OrderStatusUpdateSerializer, StockSerializer
 )
 from .permissions import (
@@ -317,3 +318,54 @@ class ApproveStockView(APIView):
         stock.save()
         
         return Response(StockSerializer(stock).data)
+    
+
+
+
+
+# Add these views to mainapp/views.py
+class MessageListCreateView(generics.ListCreateAPIView):
+    """
+    API endpoint that allows messages to be viewed or created.
+    GET: List all messages sent to or from the current user.
+    POST: Create a new message.
+    """
+    serializer_class = MessageSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        user = self.request.user
+        # For admins, show all messages
+        if user.role == 'admin':
+            return Message.objects.all()
+        # For other users, show only their messages
+        return Message.objects.filter(
+            Q(sender=user) | Q(recipient=user)
+        )
+    
+    def perform_create(self, serializer):
+        serializer.save(sender=self.request.user)
+
+class MessageDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    API endpoint that allows a single message to be viewed, updated, or deleted.
+    """
+    serializer_class = MessageSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        user = self.request.user
+        # For admins, allow access to all messages
+        if user.role == 'admin':
+            return Message.objects.all()
+        # For other users, allow access only to their messages
+        return Message.objects.filter(
+            Q(sender=user) | Q(recipient=user)
+        )
+    
+    def perform_update(self, serializer):
+        # Only allow updating the status field
+        instance = self.get_object()
+        serializer.save(
+            status=serializer.validated_data.get('status', instance.status)
+        )

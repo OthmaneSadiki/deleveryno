@@ -6,7 +6,11 @@ from rest_framework import status, generics
 from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth import authenticate
 from rest_framework.authtoken.models import Token
-from rest_framework import generics
+from django.contrib.auth.tokens import default_token_generator
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.encoding import force_bytes, force_str
+from django.core.mail import send_mail
+from django.conf import settings
 
 from .models import User
 from .serializers import (
@@ -184,3 +188,65 @@ class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
             serializer.validated_data.pop('rib')
         
         serializer.save()
+
+# Add to users/views.py
+
+
+class PasswordResetRequestView(APIView):
+    """
+    API endpoint for requesting a password reset.
+    Sends an email with a password reset link.
+    """
+    def post(self, request):
+        email = request.data.get('email')
+        if not email:
+            return Response({"error": "Email is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            user = User.objects.get(email=email)
+            
+            # Generate password reset token
+            token = default_token_generator.make_token(user)
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            
+            # Build password reset URL
+            frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
+            reset_url = f"{frontend_url}/password-reset/confirm/{uid}/{token}/"
+            
+            # Send email
+            send_mail(
+                'Password Reset Request',
+                f'Please click the link to reset your password: {reset_url}',
+                settings.DEFAULT_FROM_EMAIL,
+                [user.email],
+                fail_silently=False,
+            )
+            
+            return Response({"detail": "Password reset email has been sent."})
+        except User.DoesNotExist:
+            # Don't reveal that the user doesn't exist for security
+            return Response({"detail": "Password reset email has been sent if the email exists."})
+
+
+class PasswordResetConfirmView(APIView):
+    """
+    API endpoint for confirming a password reset.
+    Validates the token and sets the new password.
+    """
+    def post(self, request, uidb64, token):
+        try:
+            uid = force_str(urlsafe_base64_decode(uidb64))
+            user = User.objects.get(pk=uid)
+            
+            if default_token_generator.check_token(user, token):
+                password = request.data.get('password')
+                if not password:
+                    return Response({"error": "New password is required"}, status=status.HTTP_400_BAD_REQUEST)
+                
+                user.set_password(password)
+                user.save()
+                return Response({"detail": "Password has been reset successfully."})
+            else:
+                return Response({"error": "Invalid token"}, status=status.HTTP_400_BAD_REQUEST)
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            return Response({"error": "Invalid user ID"}, status=status.HTTP_400_BAD_REQUEST)

@@ -118,3 +118,47 @@ class Stock(models.Model):
         return f"{self.item_name} - {self.quantity} - {'Approved' if self.approved else 'Pending'}"
 
 
+# Add this to mainapp/models.py after the existing models
+
+class Message(models.Model):
+    """
+    Represents messages between users and admins.
+    """
+    MESSAGE_STATUS_CHOICES = [
+        ('unread', 'Unread'),
+        ('read', 'Read'),
+        ('archived', 'Archived'),
+    ]
+    
+    sender = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="sent_messages"
+    )
+    
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="received_messages"
+    )
+    
+    subject = models.CharField(max_length=255)
+    content = models.TextField()
+    status = models.CharField(
+        max_length=20,
+        choices=MESSAGE_STATUS_CHOICES,
+        default='unread'
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"Message from {self.sender.username} to {self.recipient.username}: {self.subject}"
+    
+
+    
+
