@@ -1,0 +1,1 @@
+web: gunicorn deleveryno.wsgi --log-file -
