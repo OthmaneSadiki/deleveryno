@@ -171,32 +171,35 @@ class OrderStatusUpdateView(APIView):
                     status=status.HTTP_403_FORBIDDEN
                 )
         
+        # Store the previous status for comparison
+        previous_status = order.status
+        
         serializer = OrderStatusUpdateSerializer(order, data=request.data, partial=True)
         
         if serializer.is_valid():
             # Save the order first
             updated_order = serializer.save()
             
-            # If status changed to delivered, update stock in a separate service call
-            if updated_order.status == 'delivered':
-                self._update_stock_on_delivery(updated_order)
+            # If status changed to in_transit, update stock
+            if previous_status != 'in_transit' and updated_order.status == 'in_transit':
+                self._update_stock_on_transit(updated_order)
                 
             return Response(OrderDetailSerializer(updated_order).data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
-    def _update_stock_on_delivery(self, order):
+    def _update_stock_on_transit(self, order):
         """Helper method to update stock when an order is set to in_transit"""
-        # Only update stock if status changed to in_transit
-        if order.status == 'in_transit':
-            try:
-                stock = Stock.objects.get(seller=order.seller, item_name=order.item)
-                if stock.quantity >= order.quantity:
-                    stock.quantity -= order.quantity
-                    stock.save()
-            except Stock.DoesNotExist:
-                # Log this situation but don't break the flow
-                print(f"Warning: Stock not found for item {order.item} from seller {order.seller.id}")
-
+        try:
+            stock = Stock.objects.get(seller=order.seller, item_name=order.item)
+            if stock.quantity >= order.quantity:
+                stock.quantity -= order.quantity
+                stock.save()
+            else:
+                # Log insufficient stock but still allow status change
+                print(f"Warning: Insufficient stock for order {order.id}, item {order.item}. Required: {order.quantity}, Available: {stock.quantity}")
+        except Stock.DoesNotExist:
+            # Log this situation but don't break the flow
+            print(f"Warning: Stock not found for item {order.item} from seller {order.seller.id}")
 
 class StockListCreateView(generics.ListCreateAPIView):
     """

@@ -1,4 +1,5 @@
 # users/views.py
+from urllib import request
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, generics
@@ -79,6 +80,12 @@ class UserProfileView(APIView):
         return Response(serializer.data)
     
     def patch(self, request):
+    # Use a context manager to track if role is changing
+        role_changing = False
+        current_role = request.user.role
+        if 'role' in request.data and request.data['role'] != current_role:
+            role_changing = True
+    
         serializer = UserSerializer(request.user, data=request.data, partial=True)
         if serializer.is_valid():
             # Don't allow changing role or approval status via this endpoint
@@ -86,7 +93,11 @@ class UserProfileView(APIView):
                 del serializer.validated_data['role']
             if 'approved' in serializer.validated_data:
                 del serializer.validated_data['approved']
-                
+        
+            # Remove rib field if the user is not a seller
+            if current_role != 'seller' and 'rib' in serializer.validated_data:
+                del serializer.validated_data['rib']
+            
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -151,3 +162,25 @@ class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = User.objects.all()
     serializer_class = UserSerializer
     permission_classes = [IsAuthenticated, IsAdmin]
+    def update(self, request, *args, **kwargs):
+        print("Received data:", request.data)  # Debug statement - this shows the incoming data
+        
+        # Call the parent implementation to continue normal processing
+        return super().update(request, *args, **kwargs)
+        
+    def perform_update(self, serializer):
+        
+        # Get the current user role
+        instance = self.get_object()
+        current_role = instance.role
+        new_role = serializer.validated_data.get('role', current_role)
+    
+        # If changing from seller to non-seller, remove the RIB
+        if current_role == 'seller' and new_role != 'seller':
+            instance.rib = ''
+        
+        # If role is not seller and RIB is in the data, remove it
+        if new_role != 'seller' and 'rib' in serializer.validated_data:
+            serializer.validated_data.pop('rib')
+        
+        serializer.save()

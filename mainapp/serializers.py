@@ -1,6 +1,27 @@
+from django.forms import ValidationError
 from rest_framework import serializers
-from .models import Order, Stock
+
 from users.serializers import UserSerializer
+from .models import Order, Stock
+
+
+def validate_google_maps_url(value):
+    """Validator to ensure the URL is a valid Google Maps link if provided."""
+    # Allow blank/empty values since the field is optional
+    if not value or value.strip() == '':
+        return value
+        
+    # Only validate if a value is actually provided
+    if not (
+        value.startswith('https://www.google.com/maps') or 
+        value.startswith('https://goo.gl/maps') or 
+        value.startswith('https://maps.app.goo.gl') or
+        value.startswith('https://maps.google.com')
+    ):
+        raise ValidationError(
+            'Please provide a valid Google Maps link (e.g., https://www.google.com/maps/...)'
+        )
+    return value
 
 # mainapp/serializers.py
 class OrderCreateSerializer(serializers.ModelSerializer):
@@ -8,7 +29,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
     Serializer for creating a new order.
     """
     seller_id = serializers.IntegerField(required=False, write_only=True)
-    
+    delivery_location = serializers.CharField(required=False, allow_blank=True)
     class Meta:
         model = Order
         fields = [
@@ -16,6 +37,9 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             'delivery_street', 'delivery_city', 'delivery_location',
             'item', 'quantity', 'status', 'seller_id'
         ]
+    def validate_delivery_location(self, value):
+        """Validate that delivery_location is a proper Google Maps URL if provided."""
+        return validate_google_maps_url(value)
 
     def create(self, validated_data):
         # Remove seller_id if present as it's handled in the view

@@ -46,8 +46,16 @@ class BaseRegistrationSerializer(serializers.ModelSerializer):
         return user
 
 class SellerRegistrationSerializer(BaseRegistrationSerializer):
+    # Add RIB field specifically for sellers
+    rib = serializers.CharField(required=False, allow_blank=True)
+    
+    class Meta(BaseRegistrationSerializer.Meta):
+        # Extend the fields list to include RIB
+        fields = BaseRegistrationSerializer.Meta.fields + ['rib']
+    
     def create(self, validated_data):
         validated_data['role'] = 'seller'
+        # Rest of your create method remains the same
         return super().create(validated_data)
 
 
@@ -57,17 +65,35 @@ class DriverRegistrationSerializer(BaseRegistrationSerializer):
         return super().create(validated_data)
 
 
+# Modify your UserSerializer to properly handle RIB field
 class UserSerializer(serializers.ModelSerializer):
-    """
-    A general serializer for representing a user.
-    
-    This serializer is useful for returning user details (for example,
-    after login or in a profile view). It includes fields that describe
-    the user's identity, contact information, role, and approval status.
-    """
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'phone', 'city', 'role', 'approved']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'phone', 'city', 'role', 'approved', 'rib']
+        
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        # Add RIB field only for sellers
+        if instance.role == 'seller':
+            ret['rib'] = instance.rib
+        return ret
+        
+    def update(self, instance, validated_data):
+        # Make sure this method returns the instance!
+        instance.first_name = validated_data.get('first_name', instance.first_name)
+        instance.last_name = validated_data.get('last_name', instance.last_name)
+        instance.email = validated_data.get('email', instance.email)
+        instance.phone = validated_data.get('phone', instance.phone)
+        instance.city = validated_data.get('city', instance.city)
+        instance.role = validated_data.get('role', instance.role)
+        
+        # Handle RIB field for sellers
+        if instance.role == 'seller' and 'rib' in validated_data:
+            instance.rib = validated_data.get('rib', instance.rib)
+            
+        instance.save()
+        return instance
+        
 
 
 class LoginSerializer(serializers.Serializer):

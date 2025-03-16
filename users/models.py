@@ -13,3 +13,4 @@ class User(AbstractUser):
     city = models.CharField(max_length=100, blank=True)
     approved = models.BooleanField(default=False)
     email = models.EmailField(unique=True)
+    rib = models.CharField(max_length=100, blank=True, null=True)
