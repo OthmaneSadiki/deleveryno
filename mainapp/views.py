@@ -44,11 +44,11 @@ class OrderListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         user = self.request.user
         if user.role == 'admin':
-            return Order.objects.all()
+            return Order.objects.all().order_by('-updated_at')  # Explicitly order the queryset
         elif user.role == 'seller':
-            return Order.objects.filter(seller=user)
+            return Order.objects.filter(seller=user).order_by('-updated_at')  # Explicitly order the queryset
         elif user.role == 'driver':
-            return Order.objects.filter(driver=user)
+            return Order.objects.filter(driver=user).order_by('-updated_at')  # Explicitly order the queryset
         return Order.objects.none()
     
     filter_backends = [DjangoFilterBackend]
@@ -83,7 +83,7 @@ class SellerOrderListView(generics.ListAPIView):
     permission_classes = [IsAuthenticated, IsSeller]
     
     def get_queryset(self):
-        return Order.objects.filter(seller=self.request.user)
+        return Order.objects.filter(seller=self.request.user).order_by('-updated_at')
 
 
 class DriverOrderListView(generics.ListAPIView):
@@ -95,7 +95,7 @@ class DriverOrderListView(generics.ListAPIView):
     pagination_class = None #uncomment this line to disable pagination
     
     def get_queryset(self):
-        return Order.objects.filter(driver=self.request.user)
+        return Order.objects.filter(driver=self.request.user).order_by('-updated_at')
 
 
 class OrderDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -214,9 +214,9 @@ class StockListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         user = self.request.user
         if user.role == 'admin':
-            return Stock.objects.all()
+            return Stock.objects.all().order_by('-updated_at')  # Explicitly order the queryset
         elif user.role == 'seller':
-            return Stock.objects.filter(seller=user)
+            return Stock.objects.filter(seller=user).order_by('-updated_at')  # Explicitly order the queryset
         return Stock.objects.none()
     
     def perform_create(self, serializer):
@@ -337,11 +337,11 @@ class MessageListCreateView(generics.ListCreateAPIView):
         user = self.request.user
         # For admins, show all messages
         if user.role == 'admin':
-            return Message.objects.all()
+            return Message.objects.all().order_by('-created_at')  # Explicitly order the queryset
         # For other users, show only their messages
         return Message.objects.filter(
             Q(sender=user) | Q(recipient=user)
-        )
+        ).order_by('-created_at')  # Explicitly order the queryset
     
     def perform_create(self, serializer):
         serializer.save(sender=self.request.user)

@@ -70,7 +70,7 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'first_name', 'last_name', 'phone', 'city', 'role', 'approved', 'rib']
-        
+        read_only_fields = ['date_joined', 'updated_at'] 
     def to_representation(self, instance):
         ret = super().to_representation(instance)
         # Add RIB field only for sellers

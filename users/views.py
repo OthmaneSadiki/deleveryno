@@ -130,6 +130,7 @@ class UserListView(generics.ListAPIView):
     """
     API endpoint for listing users.
     GET: Admin can see all users, sellers and drivers can see only themselves.
+    Users are ordered by most recently created first.
     """
     serializer_class = UserSerializer
     permission_classes = [IsAuthenticated]
@@ -137,7 +138,7 @@ class UserListView(generics.ListAPIView):
     def get_queryset(self):
         user = self.request.user
         if user.role == 'admin':
-            return User.objects.all()
+            return User.objects.all().order_by('-updated_at','-date_joined')  # Order by newest first
         # Other users can only see themselves
         return User.objects.filter(id=user.id)
     
